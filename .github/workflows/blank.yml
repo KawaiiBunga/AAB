@@ -12,7 +12,7 @@ jobs:
 
     steps:
     # ----------------------------
-    # Checkout Aseprite source
+    # Checkout Aseprite
     # ----------------------------
     - name: Checkout Aseprite
       uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
         fetch-depth: 0
 
     # ----------------------------
-    # Setup MSVC environment
+    # Setup MSVC
     # ----------------------------
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
@@ -42,36 +42,70 @@ jobs:
         python-version: "3.11"
 
     # ----------------------------
-    # Install depot_tools
+    # Cache depot_tools
     # ----------------------------
+    - name: Cache depot_tools
+      uses: actions/cache@v3
+      with:
+        path: depot_tools
+        key: depot_tools-${{ runner.os }}
+
     - name: Install depot_tools
       shell: pwsh
       run: |
-        git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+        if (-Not (Test-Path "depot_tools")) {
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+        }
         $env:PATH += ";$PWD/depot_tools"
         Write-Output "Depot tools added to PATH"
 
     # ----------------------------
-    # Clone Skia
+    # Cache Skia source
+    # ----------------------------
+    - name: Cache Skia source
+      uses: actions/cache@v3
+      with:
+        path: skia
+        key: skia-source-${{ runner.os }}-m121
+
+    # ----------------------------
+    # Clone Skia (can resume from cache)
     # ----------------------------
     - name: Clone Skia
       shell: pwsh
       run: |
-        git clone https://skia.googlesource.com/skia skia
+        if (-Not (Test-Path "skia")) {
+          git clone https://skia.googlesource.com/skia skia
+        }
         cd skia
+        git fetch origin
         git checkout chrome/m121
-        python tools/git-sync-deps
+        python tools/git-sync-deps || Write-Output "Dependencies already synced or cached"
 
     # ----------------------------
-    # Build Skia
+    # Cache Skia build output
+    # ----------------------------
+    - name: Cache Skia build
+      uses: actions/cache@v3
+      with:
+        path: skia/out/Release
+        key: skia-build-${{ runner.os }}-m121
+        restore-keys: |
+          skia-build-${{ runner.os }}-
+
+    # ----------------------------
+    # Build Skia (async-friendly)
     # ----------------------------
     - name: Build Skia
       shell: pwsh
       run: |
         cd skia
-        python tools/run_gn.py out/Release `
-          --args="is_official_build=true is_component_build=false target_cpu=\"x64\""
-        ninja -C out/Release
+        # Only run GN if build files are missing or outdated
+        if (-Not (Test-Path "out/Release/obj")) {
+          python tools/run_gn.py out/Release `
+            --args="is_official_build=true is_component_build=false target_cpu=\"x64\""
+        }
+        ninja -C out/Release -j $env:NUMBER_OF_PROCESSORS
 
     # ----------------------------
     # Configure Aseprite
@@ -91,7 +125,7 @@ jobs:
     # ----------------------------
     - name: Build Aseprite
       shell: pwsh
-      run: cmake --build build --config Release
+      run: cmake --build build --config Release --parallel $env:NUMBER_OF_PROCESSORS
 
     # ----------------------------
     # Package output (EXE + DLLs)
@@ -100,9 +134,7 @@ jobs:
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path output
-        # Copy main executable
         Copy-Item build\bin\Release\aseprite.exe output\
-        # Copy Skia DLLs (required for runtime)
         Copy-Item skia\out\Release\*.dll output\
 
     # ----------------------------
