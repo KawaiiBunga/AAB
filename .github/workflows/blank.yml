@@ -3,27 +3,18 @@ name: Build Aseprite (Windows CI)
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    # ----------------------------
-    # Checkout source
-    # ----------------------------
     - name: Checkout Aseprite
       uses: actions/checkout@v4
       with:
         repository: aseprite/aseprite
-        submodules: recursive
         fetch-depth: 0
 
-    # ----------------------------
-    # Setup build tools
-    # ----------------------------
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
@@ -36,18 +27,22 @@ jobs:
         python-version: "3.11"
 
     # ----------------------------
-    # Fetch and build Skia
+    # Clone Skia manually
     # ----------------------------
-    - name: Sync Skia dependencies
+    - name: Clone Skia
       shell: pwsh
       run: |
-        cd third_party/skia
+        git clone https://skia.googlesource.com/skia skia
+        cd skia
         python tools/git-sync-deps
 
+    # ----------------------------
+    # Build Skia
+    # ----------------------------
     - name: Build Skia
       shell: pwsh
       run: |
-        cd third_party/skia
+        cd skia
         python tools/run_gn.py out/Release `
           --args="is_official_build=true is_component_build=false target_cpu=\"x64\""
         ninja -C out/Release
@@ -61,13 +56,13 @@ jobs:
         cmake -S . -B build -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
           -DLAF_BACKEND=skia `
-          -DSKIA_DIR=third_party/skia `
-          -DSKIA_LIBRARY_DIR=third_party/skia/out/Release
+          -DSKIA_DIR=skia `
+          -DSKIA_LIBRARY_DIR=skia/out/Release
 
     # ----------------------------
     # Build Aseprite
     # ----------------------------
-    - name: Build
+    - name: Build Aseprite
       run: cmake --build build
 
     # ----------------------------
@@ -79,10 +74,8 @@ jobs:
         New-Item -ItemType Directory -Force -Path output
         Copy-Item build\bin\aseprite.exe output\
 
-    # ----------------------------
-    # Upload artifact
-    # ----------------------------
-    - uses: actions/upload-artifact@v4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
       with:
         name: aseprite-build
         path: output/
