@@ -1,4 +1,4 @@
-name: Build Aseprite
+name: AAB
 
 on:
   push:
@@ -24,19 +24,34 @@ jobs:
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
+    - name: Install Python deps
+      run: python -m pip install --upgrade pip
+
+    - name: Build Skia
+      shell: pwsh
+      run: |
+        cd skia
+        git submodule update --init --recursive
+        python tools/git-sync-deps
+
+        python tools/run_gn.py skia --args='is_official_build=true is_component_build=false target_cpu="x64"'
+
+        ninja -C out/Release
+
     - name: Configure
       shell: pwsh
       run: |
         cmake -B build -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
-          -DLAF_BACKEND=skia
+          -DLAF_BACKEND=skia `
+          -DSKIA_DIR=skia `
+          -DSKIA_LIBRARY_DIR=skia/out/Release `
+          -DSKIA_LIBRARY=skia
 
     - name: Build
-      shell: pwsh
       run: cmake --build build
 
     - name: Package
-      shell: pwsh
       run: |
         mkdir output
         Copy-Item build\bin\aseprite.exe output\
