@@ -1,11 +1,10 @@
-name: Build Aseprite (Windows)
+name: Build Aseprite (Windows CI)
 
 on:
   push:
   workflow_dispatch:
   schedule:
-    # Runs every 24 hours
-    - cron: "0 */24 * * *"
+    - cron: "0 */6 * * *"
 
 jobs:
   build:
@@ -13,7 +12,7 @@ jobs:
 
     steps:
     # ----------------------------
-    # Checkout Aseprite + submodules
+    # Checkout Aseprite
     # ----------------------------
     - name: Checkout source
       uses: actions/checkout@v4
@@ -37,24 +36,28 @@ jobs:
         python-version: "3.11"
 
     # ----------------------------
-    # Build Aseprite (official way)
+    # Build (non-interactive)
     # ----------------------------
-    - name: Build Aseprite
+    - name: Build Aseprite (CI mode)
       shell: cmd
       run: |
-        build.cmd
+        call build.cmd --user --silent
 
     # ----------------------------
-    # Package result
+    # Package output
     # ----------------------------
     - name: Package output
       shell: cmd
       run: |
-        mkdir output
+        if not exist build\bin (
+          echo Build failed - no output produced
+          exit 1
+        )
+        if not exist output mkdir output
         copy build\bin\aseprite.exe output\
 
     # ----------------------------
-    # Upload build artifact
+    # Upload artifact
     # ----------------------------
     - name: Upload artifact
       uses: actions/upload-artifact@v4
