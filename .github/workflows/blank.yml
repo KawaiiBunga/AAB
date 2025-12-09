@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 180  # Skia can take a while first time
 
     steps:
     # ----------------------------
@@ -20,7 +21,7 @@ jobs:
         fetch-depth: 0
 
     # ----------------------------
-    # Setup MSVC
+    # Setup MSVC environment
     # ----------------------------
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
@@ -57,7 +58,6 @@ jobs:
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
         }
         $env:PATH += ";$PWD/depot_tools"
-        Write-Output "Depot tools added to PATH"
 
     # ----------------------------
     # Cache Skia source
@@ -79,14 +79,18 @@ jobs:
         }
 
     # ----------------------------
-    # Sync Skia dependencies
+    # Initialize depot_tools & sync Skia dependencies
     # ----------------------------
-    - name: Sync Skia dependencies
+    - name: Initialize depot_tools and sync Skia
       shell: pwsh
       run: |
+        $env:PATH += ";$PWD/depot_tools"
         cd skia
-        $env:PATH += ";$PWD/../depot_tools"
-        python tools/git-sync-deps || Write-Output "Dependencies already synced or cached"
+        # Configure gclient (skip if already exists)
+        if (-Not (Test-Path ".gclient")) {
+          gclient config https://skia.googlesource.com/skia
+        }
+        gclient sync --with_branch_heads --jobs=$env:NUMBER_OF_PROCESSORS --nohooks
 
     # ----------------------------
     # Cache Skia build output
@@ -100,7 +104,7 @@ jobs:
           skia-build-${{ runner.os }}-
 
     # ----------------------------
-    # Generate Skia build files with GN
+    # Generate Skia build files (GN)
     # ----------------------------
     - name: Generate Skia build files
       shell: pwsh
@@ -132,7 +136,7 @@ jobs:
           -DCMAKE_PREFIX_PATH=skia/out/Release
 
     # ----------------------------
-    # Build Aseprite
+    # Build Aseprite (non-interactive)
     # ----------------------------
     - name: Build Aseprite
       shell: pwsh
