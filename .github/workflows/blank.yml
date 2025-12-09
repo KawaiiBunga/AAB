@@ -12,9 +12,9 @@ jobs:
 
     steps:
     # ----------------------------
-    # Checkout Aseprite
+    # Checkout source
     # ----------------------------
-    - name: Checkout source
+    - name: Checkout Aseprite
       uses: actions/checkout@v4
       with:
         repository: aseprite/aseprite
@@ -22,7 +22,7 @@ jobs:
         fetch-depth: 0
 
     # ----------------------------
-    # Setup tools
+    # Setup build tools
     # ----------------------------
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
@@ -36,31 +36,53 @@ jobs:
         python-version: "3.11"
 
     # ----------------------------
-    # Build (non-interactive)
+    # Fetch and build Skia
     # ----------------------------
-    - name: Build Aseprite (CI mode)
-      shell: cmd
+    - name: Sync Skia dependencies
+      shell: pwsh
       run: |
-        call build.cmd --user --silent
+        cd third_party/skia
+        python tools/git-sync-deps
+
+    - name: Build Skia
+      shell: pwsh
+      run: |
+        cd third_party/skia
+        python tools/run_gn.py out/Release `
+          --args="is_official_build=true is_component_build=false target_cpu=\"x64\""
+        ninja -C out/Release
+
+    # ----------------------------
+    # Configure Aseprite
+    # ----------------------------
+    - name: Configure Aseprite
+      shell: pwsh
+      run: |
+        cmake -S . -B build -G Ninja `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DLAF_BACKEND=skia `
+          -DSKIA_DIR=third_party/skia `
+          -DSKIA_LIBRARY_DIR=third_party/skia/out/Release
+
+    # ----------------------------
+    # Build Aseprite
+    # ----------------------------
+    - name: Build
+      run: cmake --build build
 
     # ----------------------------
     # Package output
     # ----------------------------
     - name: Package output
-      shell: cmd
+      shell: pwsh
       run: |
-        if not exist build\bin (
-          echo Build failed - no output produced
-          exit 1
-        )
-        if not exist output mkdir output
-        copy build\bin\aseprite.exe output\
+        New-Item -ItemType Directory -Force -Path output
+        Copy-Item build\bin\aseprite.exe output\
 
     # ----------------------------
     # Upload artifact
     # ----------------------------
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: aseprite-build
         path: output/
