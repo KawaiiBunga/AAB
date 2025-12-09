@@ -3,7 +3,7 @@ name: Build Aseprite
 on:
   push:
   schedule:
-    - cron: "0 */6 * * *"   # every 6 hours
+    - cron: "0 */6 * * *"
   workflow_dispatch:
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
       with:
         repository: aseprite/aseprite
         submodules: recursive
+        fetch-depth: 0
 
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@v4
@@ -24,18 +25,21 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Configure
+      shell: pwsh
       run: |
-        cmake -B build -G Ninja ^
-          -DCMAKE_BUILD_TYPE=Release ^
+        cmake -B build -G Ninja `
+          -DCMAKE_BUILD_TYPE=Release `
           -DLAF_BACKEND=skia
 
     - name: Build
+      shell: pwsh
       run: cmake --build build
 
     - name: Package
+      shell: pwsh
       run: |
         mkdir output
-        copy build\bin\aseprite.exe output\aseprite.exe
+        Copy-Item build\bin\aseprite.exe output\
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
