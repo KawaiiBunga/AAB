@@ -42,7 +42,7 @@ jobs:
     - name: Build Aseprite
       shell: cmd
       run: |
-        build.bat
+        build.cmd
 
     # ----------------------------
     # Package result
