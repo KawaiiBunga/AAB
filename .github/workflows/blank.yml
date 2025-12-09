@@ -1,16 +1,20 @@
-name: AAB
+name: Build Aseprite (Windows)
 
 on:
   push:
-  schedule:
-    - cron: "0 */6 * * *"
   workflow_dispatch:
+  schedule:
+    # Runs every 24 hours
+    - cron: "0 */24 * * *"
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
+    # ----------------------------
+    # Checkout Aseprite + submodules
+    # ----------------------------
     - name: Checkout source
       uses: actions/checkout@v4
       with:
@@ -18,44 +22,40 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Install Ninja
-      uses: seanmiddleditch/gha-setup-ninja@v4
-
+    # ----------------------------
+    # Setup tools
+    # ----------------------------
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Install Python deps
-      run: python -m pip install --upgrade pip
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@v4
 
-    - name: Build Skia
-      shell: pwsh
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    # ----------------------------
+    # Build Aseprite (official way)
+    # ----------------------------
+    - name: Build Aseprite
+      shell: cmd
       run: |
-        cd skia
-        git submodule update --init --recursive
-        python tools/git-sync-deps
+        build.bat
 
-        python tools/run_gn.py skia --args='is_official_build=true is_component_build=false target_cpu="x64"'
-
-        ninja -C out/Release
-
-    - name: Configure
-      shell: pwsh
-      run: |
-        cmake -B build -G Ninja `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DLAF_BACKEND=skia `
-          -DSKIA_DIR=skia `
-          -DSKIA_LIBRARY_DIR=skia/out/Release `
-          -DSKIA_LIBRARY=skia
-
-    - name: Build
-      run: cmake --build build
-
-    - name: Package
+    # ----------------------------
+    # Package result
+    # ----------------------------
+    - name: Package output
+      shell: cmd
       run: |
         mkdir output
-        Copy-Item build\bin\aseprite.exe output\
+        copy build\bin\aseprite.exe output\
 
+    # ----------------------------
+    # Upload build artifact
+    # ----------------------------
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
