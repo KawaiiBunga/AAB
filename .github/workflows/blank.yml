@@ -3,18 +3,26 @@ name: Build Aseprite (Windows CI)
 on:
   push:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
+    # ----------------------------
+    # Checkout Aseprite source
+    # ----------------------------
     - name: Checkout Aseprite
       uses: actions/checkout@v4
       with:
         repository: aseprite/aseprite
         fetch-depth: 0
 
+    # ----------------------------
+    # Setup toolchain
+    # ----------------------------
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
@@ -27,13 +35,14 @@ jobs:
         python-version: "3.11"
 
     # ----------------------------
-    # Clone Skia manually
+    # Clone Skia (compatible version)
     # ----------------------------
     - name: Clone Skia
       shell: pwsh
       run: |
         git clone https://skia.googlesource.com/skia skia
         cd skia
+        git checkout chrome/m121
         python tools/git-sync-deps
 
     # ----------------------------
@@ -74,6 +83,9 @@ jobs:
         New-Item -ItemType Directory -Force -Path output
         Copy-Item build\bin\aseprite.exe output\
 
+    # ----------------------------
+    # Upload artifact
+    # ----------------------------
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
