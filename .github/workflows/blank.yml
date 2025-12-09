@@ -69,17 +69,23 @@ jobs:
         key: skia-source-${{ runner.os }}-m121
 
     # ----------------------------
-    # Clone Skia (can resume from cache)
+    # Clone Skia
     # ----------------------------
     - name: Clone Skia
       shell: pwsh
       run: |
         if (-Not (Test-Path "skia")) {
-          git clone https://skia.googlesource.com/skia skia
+          git clone https://skia.googlesource.com/skia skia --branch chrome/m121 --single-branch
         }
+
+    # ----------------------------
+    # Sync Skia dependencies
+    # ----------------------------
+    - name: Sync Skia dependencies
+      shell: pwsh
+      run: |
         cd skia
-        git fetch origin
-        git checkout chrome/m121
+        $env:PATH += ";$PWD/../depot_tools"
         python tools/git-sync-deps || Write-Output "Dependencies already synced or cached"
 
     # ----------------------------
@@ -94,18 +100,23 @@ jobs:
           skia-build-${{ runner.os }}-
 
     # ----------------------------
-    # Build Skia (async-friendly)
+    # Generate Skia build files with GN
     # ----------------------------
-    - name: Build Skia
+    - name: Generate Skia build files
       shell: pwsh
       run: |
         cd skia
-        # Only run GN if build files are missing or outdated
+        $env:PATH += ";$PWD/../depot_tools"
         if (-Not (Test-Path "out/Release/obj")) {
-          python tools/run_gn.py out/Release `
-            --args="is_official_build=true is_component_build=false target_cpu=\"x64\""
+          gn gen out/Release --args="is_official_build=true is_component_build=false target_cpu=\"x64\""
         }
-        ninja -C out/Release -j $env:NUMBER_OF_PROCESSORS
+
+    # ----------------------------
+    # Build Skia
+    # ----------------------------
+    - name: Build Skia
+      shell: pwsh
+      run: ninja -C skia/out/Release -j $env:NUMBER_OF_PROCESSORS
 
     # ----------------------------
     # Configure Aseprite
